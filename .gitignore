@@ -9,6 +9,7 @@ node_modules
 /data/sources/
 /data/images/
 claude*
+CLAUDE.md
 
 # output
 out

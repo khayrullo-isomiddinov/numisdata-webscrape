@@ -1,0 +1,951 @@
+/* ---------------------------------------------------------------------- */
+/* Design tokens                                                          */
+/* ---------------------------------------------------------------------- */
+:root {
+  --ink: #211d17;
+  --ink-soft: #4d463c;
+  --muted: #837b6c;
+  --faint: #a99f8c;
+  --paper: #faf7f0;
+  --paper-raised: #fffdf8;
+  --border: #e4ddca;
+  --border-strong: #d2c8ac;
+  --accent: #8a6a2e;
+  --accent-strong: #6d5322;
+  --accent-tint: #f1e6cd;
+  --status-live: #8a6a2e;
+  --status-upcoming: #3f6b4e;
+  --status-closed: #7a7266;
+  --danger: #a13a2f;
+  --danger-tint: #f6e6e2;
+  --shadow-sm: 0 1px 2px rgba(33, 29, 23, 0.06), 0 1px 1px rgba(33, 29, 23, 0.04);
+  --shadow-md: 0 6px 20px rgba(33, 29, 23, 0.08), 0 2px 6px rgba(33, 29, 23, 0.05);
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: var(--accent-strong);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--serif);
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Top bar                                                                */
+/* ---------------------------------------------------------------------- */
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: var(--paper-raised);
+  padding: 0.9rem 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.topbar-brand .mark {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.topbar-brand .tagline {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+
+.topbar-nav {
+  display: flex;
+  gap: 1.4rem;
+  align-items: center;
+}
+
+.topbar-search {
+  width: 260px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Shared layout                                                          */
+/* ---------------------------------------------------------------------- */
+.page {
+  flex: 1;
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 2.25rem 1.75rem 4rem;
+}
+
+.page-narrow {
+  max-width: 760px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Buttons & inputs                                                       */
+/* ---------------------------------------------------------------------- */
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.55rem 1.1rem;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-raised);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #fff;
+}
+
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #841f16;
+  border-color: #841f16;
+  color: #fff;
+}
+
+.btn-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  color: var(--accent-strong);
+  border-color: transparent;
+  background: var(--accent-tint);
+}
+
+.btn-sm {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+}
+
+input[type="text"],
+input[type="search"],
+input[type="url"],
+select {
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+}
+
+input[type="text"]:focus,
+input[type="search"]:focus,
+input[type="url"]:focus,
+select:focus {
+  outline: 2px solid var(--accent-tint);
+  border-color: var(--accent);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Home / retrieval                                                       */
+/* ---------------------------------------------------------------------- */
+.hero {
+  text-align: center;
+  padding: 3.5rem 0 2.5rem;
+}
+
+.hero h1 {
+  font-size: 2.1rem;
+  margin-bottom: 0.6rem;
+}
+
+.hero p {
+  color: var(--muted);
+  font-size: 1rem;
+  max-width: 46ch;
+  margin: 0 auto;
+}
+
+.retrieve-card {
+  background: var(--paper-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 1.75rem;
+}
+
+.retrieve-form {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.retrieve-form input {
+  flex: 1;
+}
+
+.retrieve-alt {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px dashed var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.retrieve-alt .label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.status-stepper {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.status-step {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.85rem;
+  color: var(--faint);
+}
+
+.status-step.active {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.status-step.done {
+  color: var(--status-upcoming);
+}
+
+.status-step.error {
+  color: var(--danger);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  flex-shrink: 0;
+}
+
+.status-step.active .status-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+
+.status-step.done .status-dot {
+  background: var(--status-upcoming);
+}
+
+.status-step.error .status-dot {
+  background: var(--danger);
+}
+
+.error-banner {
+  margin-top: 1.25rem;
+  background: var(--danger-tint);
+  border: 1px solid #e3b7ac;
+  color: var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  font-size: 0.88rem;
+}
+
+.error-banner .diagnostic {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: #8a5148;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.recent-auctions {
+  margin-top: 3rem;
+}
+
+.recent-auctions h2 {
+  font-size: 1.05rem;
+  margin-bottom: 1rem;
+  color: var(--ink-soft);
+}
+
+.auction-row-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--paper-raised);
+}
+
+.auction-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+}
+
+.auction-row:last-child {
+  border-bottom: none;
+}
+
+.auction-row:hover {
+  background: var(--accent-tint);
+}
+
+.auction-row-title {
+  font-weight: 600;
+  font-family: var(--serif);
+}
+
+.auction-row-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Badges                                                                 */
+/* ---------------------------------------------------------------------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  color: var(--ink-soft);
+  background: var(--paper);
+}
+
+.badge-status-upcoming {
+  color: #2f5a3f;
+  border-color: #bcd6c4;
+  background: #eaf3ec;
+}
+
+.badge-status-live {
+  color: var(--accent-strong);
+  border-color: #e1cd9c;
+  background: var(--accent-tint);
+}
+
+.badge-status-closed {
+  color: var(--muted);
+  background: #efeadf;
+}
+
+.meta-badge {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.15rem 0.5rem;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Auction header                                                         */
+/* ---------------------------------------------------------------------- */
+.auction-header {
+  background: var(--paper-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 1.75rem 2rem;
+  margin-bottom: 1.75rem;
+}
+
+.auction-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.auction-header-house {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-strong);
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+
+.auction-header h1 {
+  font-size: 1.6rem;
+}
+
+.auction-header-desc {
+  color: var(--muted);
+  margin-top: 0.35rem;
+  font-size: 0.92rem;
+}
+
+.auction-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.auction-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.1rem;
+}
+
+.auction-header-foot {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.76rem;
+  color: var(--faint);
+}
+
+.auction-header-foot a {
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Filters                                                                */
+/* ---------------------------------------------------------------------- */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.filter-bar select {
+  min-width: 140px;
+}
+
+.filter-count {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Selection bar (lot curation)                                           */
+/* ---------------------------------------------------------------------- */
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--paper-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.7rem 1rem;
+  margin-bottom: 1.15rem;
+}
+
+.selection-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.selection-bar-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.selection-bar-count {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.selection-bar-actions {
+  margin-left: auto;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Lot grid & cards                                                       */
+/* ---------------------------------------------------------------------- */
+.lot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.15rem;
+}
+
+.lot-card-wrapper {
+  position: relative;
+}
+
+.lot-card-wrapper.deselected .lot-card {
+  opacity: 0.45;
+}
+
+.lot-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  background: var(--paper-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.lot-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.lot-card-select {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(250, 247, 240, 0.92);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.lot-card-select input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin: 0;
+}
+
+.lot-card-image {
+  aspect-ratio: 1 / 1;
+  background: #f1ede2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.lot-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.lot-card-image .placeholder {
+  color: var(--faint);
+  font-size: 0.75rem;
+}
+
+.lot-card-body {
+  padding: 0.85rem 0.95rem 1rem;
+}
+
+.lot-card-number {
+  font-size: 0.72rem;
+  color: var(--accent-strong);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.lot-card-title {
+  font-family: var(--serif);
+  font-size: 0.92rem;
+  line-height: 1.35;
+  margin: 0.2rem 0 0.55rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lot-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+
+.lot-card-price {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.82rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.55rem;
+}
+
+.lot-card-price .label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.lot-card-price .value {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3.5rem 1rem;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Lot detail page                                                        */
+/* ---------------------------------------------------------------------- */
+.lot-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 2.5rem;
+}
+
+@media (max-width: 860px) {
+  .lot-detail {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lot-detail-breadcrumb {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+
+.lot-detail-image-main {
+  background: #f1ede2;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.lot-detail-image-main img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.lot-detail-thumbs {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.lot-detail-thumbs button {
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  width: 64px;
+  height: 64px;
+  background: #f1ede2;
+}
+
+.lot-detail-thumbs button.active {
+  border-color: var(--accent);
+}
+
+.lot-detail-thumbs img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.lot-detail-number {
+  font-size: 0.8rem;
+  color: var(--accent-strong);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+}
+
+.lot-detail h1 {
+  font-size: 1.5rem;
+  line-height: 1.3;
+}
+
+.lot-detail-section {
+  margin-top: 1.75rem;
+}
+
+.lot-detail-section h3 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 0.7rem;
+}
+
+.lot-detail-description {
+  font-size: 0.94rem;
+  line-height: 1.65;
+  color: var(--ink-soft);
+}
+
+.lot-detail-description p {
+  margin: 0 0 0.8rem;
+}
+
+.spec-table {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  row-gap: 0.55rem;
+  column-gap: 1.5rem;
+  font-size: 0.88rem;
+}
+
+.spec-table dt {
+  color: var(--muted);
+}
+
+.spec-table dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.price-panel {
+  background: var(--paper-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.1rem 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.price-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+.price-row .label {
+  color: var(--muted);
+}
+
+.price-row.realized .value {
+  color: var(--accent-strong);
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.image-download-note {
+  font-size: 0.76rem;
+  color: var(--faint);
+  margin-top: 0.5rem;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Import dropzone                                                        */
+/* ---------------------------------------------------------------------- */
+.dropzone {
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: var(--paper);
+}
+
+.dropzone.active {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(33, 29, 23, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 1.5rem;
+}
+
+.modal {
+  background: var(--paper-raised);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 1.75rem;
+  max-width: 480px;
+  width: 100%;
+}
+
+.modal h2 {
+  font-size: 1.15rem;
+  margin-bottom: 0.4rem;
+}
+
+.modal p {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 1.1rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+
+.field-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  color: var(--ink-soft);
+}
+
+.field {
+  margin-bottom: 1rem;
+}
+
+.field input {
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Loading                                                                */
+/* ---------------------------------------------------------------------- */
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 0;
+  color: var(--muted);
+  gap: 0.6rem;
+}

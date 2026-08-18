@@ -8,6 +8,7 @@ node_modules
 /data/*.sqlite-wal
 /data/sources/
 /data/images/
+claude*
 
 # output
 out

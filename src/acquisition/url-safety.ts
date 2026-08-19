@@ -7,32 +7,53 @@ export class UnsafeUrlError extends Error {
   }
 }
 
-const ALLOWED_HOSTS = [/^biddr\.com$/i, /^www\.biddr\.com$/i, /^media\.biddr\.com$/i, /^[a-z0-9-]+\.biddr\.com$/i];
+const BIDDR_ALLOWED_HOSTS = [/^biddr\.com$/i, /^www\.biddr\.com$/i, /^media\.biddr\.com$/i, /^[a-z0-9-]+\.biddr\.com$/i];
+const SIXBID_ALLOWED_HOSTS = [/^www\.sixbid\.com$/i, /^lots\.sixbid\.com$/i, /^image-cdn\.sixbid\.com$/i];
 
 /**
- * This is a personal archive tool for Biddr specifically, not a general-purpose fetcher, so we
- * allowlist Biddr's own hostnames rather than trying to blocklist everything unsafe. Combined
- * with an https-only + private-IP check, this closes off SSRF via crafted or redirected URLs.
+ * This is a personal archive tool for a small, known set of auction sites, not a general-purpose
+ * fetcher, so we allowlist each source's own hostnames rather than trying to blocklist everything
+ * unsafe. Combined with an https-only + private-IP check, this closes off SSRF via crafted or
+ * redirected URLs.
  */
-export function assertSafeBiddrUrl(rawUrl: string): URL {
+function assertSafeKnownHost(rawUrl: string, allowedHosts: RegExp[], invalidUrlMessage: string, wrongHostMessage: string): URL {
   let url: URL;
   try {
     url = new URL(rawUrl);
   } catch {
-    throw new UnsafeUrlError("Please provide a valid Biddr auction URL.");
+    throw new UnsafeUrlError(invalidUrlMessage);
   }
 
   if (url.protocol !== "https:") {
     throw new UnsafeUrlError("Only https:// URLs are supported.");
   }
 
-  if (!ALLOWED_HOSTS.some((pattern) => pattern.test(url.hostname))) {
-    throw new UnsafeUrlError("Only biddr.com URLs are supported.");
+  if (!allowedHosts.some((pattern) => pattern.test(url.hostname))) {
+    throw new UnsafeUrlError(wrongHostMessage);
   }
 
   assertNotPrivateHost(url.hostname);
 
   return url;
+}
+
+export function assertSafeBiddrUrl(rawUrl: string): URL {
+  return assertSafeKnownHost(
+    rawUrl,
+    BIDDR_ALLOWED_HOSTS,
+    "Please provide a valid Biddr auction URL.",
+    "Only biddr.com URLs are supported.",
+  );
+}
+
+/** Allowlists sixbid.com's browser-facing host plus the two hosts we actually fetch data/images from. */
+export function assertSafeSixbidUrl(rawUrl: string): URL {
+  return assertSafeKnownHost(
+    rawUrl,
+    SIXBID_ALLOWED_HOSTS,
+    "Please provide a valid sixbid.com auction URL.",
+    "Only sixbid.com URLs are supported.",
+  );
 }
 
 export function assertNotPrivateHost(hostname: string): void {

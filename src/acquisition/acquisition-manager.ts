@@ -20,6 +20,9 @@ export interface MultiPageAcquisition {
   method: AcquisitionMethod;
 }
 
+/** Called after each page is fetched, with the page just completed and the total known so far. */
+export type AcquisitionProgress = (currentPage: number, totalPages: number) => void;
+
 const MAX_PAGES = 50;
 
 /** True when a page's HTML carries the markers we rely on for extraction. */
@@ -35,7 +38,7 @@ function looksLikeAuctionPage(html: string): boolean {
  * listing's own pagination to collect every page belonging to the auction, honoring the same
  * rate limiting as the first request.
  */
-export async function acquireAuction(rawUrl: string): Promise<MultiPageAcquisition> {
+export async function acquireAuction(rawUrl: string, onProgress?: AcquisitionProgress): Promise<MultiPageAcquisition> {
   const url = assertSafeBiddrUrl(rawUrl);
   const auctionIdentifier = getQueryParam(url.toString(), "a");
   if (!auctionIdentifier) {
@@ -62,13 +65,15 @@ export async function acquireAuction(rawUrl: string): Promise<MultiPageAcquisiti
   }
 
   const pages: RawSource[] = [first];
-  const totalPages = parseTotalPages(first.html);
+  const totalPages = Math.min(parseTotalPages(first.html), MAX_PAGES);
+  onProgress?.(1, totalPages);
 
-  for (let p = 2; p <= Math.min(totalPages, MAX_PAGES); p++) {
+  for (let p = 2; p <= totalPages; p++) {
     const pageUrl = new URL(url.toString());
     pageUrl.searchParams.set("p", String(p));
     const page = method === "browser" ? await fetchRenderedPage(pageUrl.toString()) : await fetchPublicPage(pageUrl.toString());
     pages.push(page);
+    onProgress?.(p, totalPages);
   }
 
   return { auctionIdentifier, pages, method };

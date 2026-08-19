@@ -11,6 +11,8 @@ interface RunRow {
   error_message: string | null;
   raw_file_path: string | null;
   auction_id: number | null;
+  current_page: number | null;
+  total_pages: number | null;
 }
 
 function mapRow(row: RunRow): AcquisitionRun {
@@ -23,6 +25,9 @@ function mapRow(row: RunRow): AcquisitionRun {
     acquisitionMethod: row.acquisition_method as AcquisitionMethod,
     errorMessage: row.error_message,
     rawFilePath: row.raw_file_path,
+    auctionId: row.auction_id,
+    currentPage: row.current_page,
+    totalPages: row.total_pages,
   };
 }
 
@@ -45,6 +50,13 @@ export class AcquisitionRunRepository {
         "UPDATE acquisition_runs SET completed_at = ?, status = ?, raw_file_path = ?, auction_id = ?, error_message = ? WHERE id = ?",
       )
       .run(new Date().toISOString(), fields.status, fields.rawFilePath, fields.auctionId, fields.errorMessage ?? null, id);
+  }
+
+  /** Records page-by-page progress while a run is still in flight (before complete() is called). */
+  updateProgress(id: number, currentPage: number, totalPages: number): void {
+    this.db
+      .query("UPDATE acquisition_runs SET current_page = ?, total_pages = ? WHERE id = ?")
+      .run(currentPage, totalPages, id);
   }
 
   findById(id: number): AcquisitionRun | null {

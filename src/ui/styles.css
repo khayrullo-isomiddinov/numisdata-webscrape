@@ -275,53 +275,33 @@ select:focus {
   color: var(--muted);
 }
 
-.status-stepper {
+.progress-panel {
   margin-top: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.5rem;
 }
 
-.status-step {
+.progress-status {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
   font-size: 0.85rem;
-  color: var(--faint);
-}
-
-.status-step.active {
-  color: var(--ink);
+  color: var(--ink-soft);
   font-weight: 600;
 }
 
-.status-step.done {
-  color: var(--status-upcoming);
+.progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
 }
 
-.status-step.error {
-  color: var(--danger);
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--border-strong);
-  flex-shrink: 0;
-}
-
-.status-step.active .status-dot {
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
   background: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-tint);
-}
-
-.status-step.done .status-dot {
-  background: var(--status-upcoming);
-}
-
-.status-step.error .status-dot {
-  background: var(--danger);
+  transition: width 0.3s ease;
 }
 
 .error-banner {

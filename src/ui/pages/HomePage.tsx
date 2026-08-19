@@ -3,52 +3,75 @@ import { api, ApiError, type AuctionSummary } from "../api.ts";
 import { Link } from "../router.tsx";
 import { formatDate } from "../format.ts";
 
-const STEPS = [
-  "Validating URL",
-  "Acquiring source",
-  "Extracting auction metadata",
-  "Extracting lots",
-  "Saving to database",
-  "Complete",
-] as const;
+type RetrievePhase = { kind: "starting" } | { kind: "polling"; currentPage: number | null; totalPages: number | null };
 
-type StepState = "pending" | "active" | "done" | "error";
+const POLL_INTERVAL_MS = 700;
 
 export function HomePage({ navigate }: { navigate: (path: string) => void }) {
   const [url, setUrl] = useState("");
-  const [stepIndex, setStepIndex] = useState<number | null>(null);
+  const [phase, setPhase] = useState<RetrievePhase | null>(null);
   const [error, setError] = useState<{ message: string; diagnostic?: Record<string, unknown> } | null>(null);
   const [auctions, setAuctions] = useState<AuctionSummary[]>([]);
   const [importOpen, setImportOpen] = useState(false);
-  const timerRef = useRef<number | null>(null);
+  const pollTimerRef = useRef<number | null>(null);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
     api.listAuctions().then((r) => setAuctions(r.auctions)).catch(() => {});
+    return () => {
+      cancelledRef.current = true;
+      if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
+    };
   }, []);
+
+  /** Polls GET /api/acquisitions/:runId for real page-by-page progress until the run completes -
+   * the backend acquires pages in the background (rate-limited, can take well over a minute for
+   * a large multi-page sixbid/Biddr auction), so this is the actual state, not a simulation. */
+  function pollRun(runId: number) {
+    const tick = async () => {
+      if (cancelledRef.current) return;
+      let run: Awaited<ReturnType<typeof api.getAcquisitionRun>>["run"];
+      try {
+        ({ run } = await api.getAcquisitionRun(runId));
+      } catch {
+        // Transient failure polling status - keep trying rather than giving up on one hiccup.
+        pollTimerRef.current = window.setTimeout(tick, POLL_INTERVAL_MS);
+        return;
+      }
+      if (cancelledRef.current) return;
+
+      if (!run.completedAt) {
+        setPhase({ kind: "polling", currentPage: run.currentPage, totalPages: run.totalPages });
+        pollTimerRef.current = window.setTimeout(tick, POLL_INTERVAL_MS);
+        return;
+      }
+
+      if (run.status === "success" && run.auctionId) {
+        navigate(`/auctions/${run.auctionId}`);
+      } else {
+        setPhase(null);
+        setError({ message: run.errorMessage ?? "Retrieval failed." });
+      }
+    };
+    tick();
+  }
 
   async function handleRetrieve(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!url.trim()) return;
 
-    setStepIndex(0);
-    // Advance through the illustrative steps while the (synchronous) request is in flight -
-    // the backend runs acquisition -> extraction -> persistence as one call, so this animates
-    // progress rather than tracking literal server-side phase transitions.
-    let step = 0;
-    timerRef.current = window.setInterval(() => {
-      step = Math.min(step + 1, STEPS.length - 2);
-      setStepIndex(step);
-    }, 900);
-
+    setPhase({ kind: "starting" });
     try {
       const result = await api.retrieve(url.trim());
-      if (timerRef.current) window.clearInterval(timerRef.current);
-      setStepIndex(STEPS.length - 1);
-      window.setTimeout(() => navigate(`/auctions/${result.auctionId}`), 400);
+      if (result.status === "complete") {
+        navigate(`/auctions/${result.auctionId}`);
+        return;
+      }
+      setPhase({ kind: "polling", currentPage: null, totalPages: null });
+      pollRun(result.runId);
     } catch (err) {
-      if (timerRef.current) window.clearInterval(timerRef.current);
-      setStepIndex(null);
+      setPhase(null);
       if (err instanceof ApiError) {
         setError({ message: err.payload.error, diagnostic: err.payload.diagnostic });
       } else {
@@ -57,36 +80,49 @@ export function HomePage({ navigate }: { navigate: (path: string) => void }) {
     }
   }
 
+  const busy = phase !== null;
+
   return (
     <div className="page page-narrow">
       <div className="hero">
         <h1>Numismatic Archive</h1>
-        <p>Paste a public Biddr auction URL to build a permanent, searchable local catalogue of coins you're tracking.</p>
+        <p>Paste a public Biddr or sixbid.com auction URL to build a permanent, searchable local catalogue of coins you're tracking.</p>
       </div>
 
       <div className="retrieve-card">
         <form className="retrieve-form" onSubmit={handleRetrieve}>
           <input
             type="url"
-            placeholder="Paste Biddr auction URL..."
+            placeholder="Paste a Biddr or sixbid.com auction URL..."
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            disabled={stepIndex !== null}
+            disabled={busy}
           />
-          <button type="submit" className="btn btn-primary" disabled={stepIndex !== null}>
+          <button type="submit" className="btn btn-primary" disabled={busy}>
             Retrieve Auction
           </button>
         </form>
 
-        {stepIndex !== null && (
-          <div className="status-stepper">
-            {STEPS.map((label, i) => (
-              <div key={label} className={`status-step ${i < stepIndex ? "done" : i === stepIndex ? "active" : ""}`}>
-                <span className="status-dot" />
-                {label}
-                {i === stepIndex && i < STEPS.length - 1 && <span className="spinner" style={{ marginLeft: 4 }} />}
+        {phase && (
+          <div className="progress-panel">
+            {phase.kind === "polling" && phase.currentPage !== null && phase.totalPages !== null ? (
+              <>
+                <div className="progress-status">
+                  Fetching page {phase.currentPage} of {phase.totalPages}...
+                </div>
+                <div className="progress-bar">
+                  <div
+                    className="progress-bar-fill"
+                    style={{ width: `${Math.min(100, (phase.currentPage / phase.totalPages) * 100)}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="progress-status">
+                <span className="spinner" style={{ marginRight: 6 }} />
+                {phase.kind === "starting" ? "Starting retrieval..." : "Connecting to source..."}
               </div>
-            ))}
+            )}
           </div>
         )}
 

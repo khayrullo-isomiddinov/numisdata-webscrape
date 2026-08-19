@@ -4,19 +4,18 @@ import { LotRepository } from "../../database/repositories/lot-repository.ts";
 import { ImageRepository } from "../../database/repositories/image-repository.ts";
 import { AcquisitionRunRepository } from "../../database/repositories/acquisition-run-repository.ts";
 import {
-  acquireAuction,
   AcquisitionBlockedError,
   BrowserUnavailableError,
   RobotsDisallowedError,
   UnsafeUrlError,
   UnsupportedPageError,
 } from "../../acquisition/acquisition-manager.ts";
-import { assertSafeBiddrUrl } from "../../acquisition/url-safety.ts";
+import { SixbidArchivedError } from "../../acquisition/sixbid-api.ts";
 import { importLocalHtml, InvalidImportError } from "../../acquisition/local-file.ts";
 import { loadSavedSource, saveSourcePages, sourceDirFor } from "../../acquisition/source-storage.ts";
-import { parseAuction } from "../../extraction/auction-parser.ts";
-import { parseLotListing } from "../../extraction/lot-parser.ts";
-import { getQueryParam } from "../../extraction/parser-utils.ts";
+import { biddrAdapter } from "../../acquisition/biddr-adapter.ts";
+import { sixbidAdapter } from "../../acquisition/sixbid-adapter.ts";
+import type { SourceAdapter } from "../../acquisition/source-adapter.ts";
 import type { RawSource } from "../../acquisition/http.ts";
 import type { Auction } from "../../domain/auction.ts";
 import type { AcquisitionMethod } from "../../domain/image.ts";
@@ -43,6 +42,17 @@ function repos() {
   };
 }
 
+/** Every source this app knows how to acquire from, tried in order against a pasted URL. */
+const ADAPTERS: SourceAdapter[] = [biddrAdapter, sixbidAdapter];
+
+function selectAdapter(rawUrl: string): SourceAdapter {
+  const adapter = ADAPTERS.find((a) => a.matchesUrl(rawUrl));
+  if (!adapter) {
+    throw new IngestionError("Please provide a valid Biddr or sixbid.com auction URL.", "invalid-url", { url: rawUrl });
+  }
+  return adapter;
+}
+
 interface PersistResult {
   auction: Auction;
   lotCount: number;
@@ -50,6 +60,7 @@ interface PersistResult {
 
 /** Exported for tests - not part of the public API surface used by controllers. */
 export function persistPages(
+  adapter: SourceAdapter,
   auctionUrl: string,
   pages: RawSource[],
   method: AcquisitionMethod,
@@ -58,13 +69,13 @@ export function persistPages(
   const { auctions, lots, images } = repos();
   const firstPage = pages[0]!;
 
-  const extractedAuction = parseAuction({ html: firstPage.html, sourceUrl: auctionUrl });
+  const extractedAuction = adapter.parseAuction(firstPage, auctionUrl);
   const auction = auctions.upsert(extractedAuction, { acquisitionMethod: method, rawSourcePath });
   const excluded = lots.listExcludedIdentifiers(auction.id);
 
   let lotCount = 0;
   for (const page of pages) {
-    const extractedLots = parseLotListing(page.html, auctionUrl);
+    const extractedLots = adapter.parseLots(page, auctionUrl);
     for (const extractedLot of extractedLots) {
       // The user deliberately deleted this lot from the archive at some point - a Refresh or
       // Re-import re-parsing the same (or freshly re-fetched) listing must not bring it back.
@@ -85,7 +96,7 @@ export function persistPages(
 
 function mapAcquisitionError(err: unknown, url: string): IngestionError {
   if (err instanceof UnsafeUrlError) {
-    return new IngestionError("Please provide a valid Biddr auction URL.", "invalid-url", { url });
+    return new IngestionError("Please provide a valid Biddr or sixbid.com auction URL.", "invalid-url", { url });
   }
   if (err instanceof AcquisitionBlockedError || err instanceof RobotsDisallowedError) {
     return new IngestionError(
@@ -101,6 +112,9 @@ function mapAcquisitionError(err: unknown, url: string): IngestionError {
       { url, reason: err.message },
     );
   }
+  if (err instanceof SixbidArchivedError) {
+    return new IngestionError(err.message, "unsupported", { url });
+  }
   if (err instanceof UnsupportedPageError) {
     return new IngestionError(err.message, "unsupported", { url });
   }
@@ -110,47 +124,71 @@ function mapAcquisitionError(err: unknown, url: string): IngestionError {
   });
 }
 
-/** POST /api/acquisitions - "Retrieve": creates the auction if it doesn't exist; otherwise returns the existing one without hitting the network again. */
-export async function retrieveAuction(url: string): Promise<PersistResult & { created: boolean }> {
-  const { auctions } = repos();
+export type StartRetrieveResult =
+  | { kind: "existing"; auction: Auction; lotCount: number }
+  | { kind: "started"; runId: number };
 
-  // Validate the URL up front, even on the dedupe fast path below - a malformed/non-Biddr URL
-  // should always be rejected rather than silently matched against an unrelated existing auction.
+/**
+ * POST /api/acquisitions - "Retrieve". If the auction already exists, returns it immediately
+ * (no network). Otherwise starts the acquisition in the background and returns right away with a
+ * runId - a multi-page sixbid/Biddr acquisition can take well over a minute (rate-limited to
+ * ~3s/page), so the HTTP request doesn't block on it. Progress and the final result are reported
+ * via the acquisition_runs row, polled through GET /api/acquisitions/:id
+ * (see AcquisitionRunRepository.updateProgress and runAcquisitionInBackground below).
+ */
+export async function startRetrieveAuction(url: string): Promise<StartRetrieveResult> {
+  const { auctions, runs } = repos();
+
+  const adapter = selectAdapter(url);
+  // Validate the URL up front, even on the dedupe fast path below - a malformed URL should
+  // always be rejected rather than silently matched against an unrelated existing auction.
   try {
-    assertSafeBiddrUrl(url);
+    adapter.assertSafeUrl(url);
   } catch (err) {
     throw mapAcquisitionError(err, url);
   }
 
-  const auctionIdentifier = getQueryParam(url, "a");
+  const auctionIdentifier = adapter.parseAuctionIdentifier(url);
   if (auctionIdentifier) {
-    const existing = auctions.findByIdentifier("biddr.com", auctionIdentifier);
+    const existing = auctions.findByIdentifier(adapter.sourceDomain, auctionIdentifier);
     if (existing) {
       const lotCount = repos().lots.listForAuction(existing.id).length;
-      return { auction: existing, lotCount, created: false };
+      return { kind: "existing", auction: existing, lotCount };
     }
   }
 
-  const runId = repos().runs.start(url, "http");
+  const runId = runs.start(url, "http");
+  // Deliberately not awaited - the acquisition run continues after this function returns; errors
+  // are caught inside and written to the run row, not thrown here (there's no request left to
+  // throw them to).
+  runAcquisitionInBackground(adapter, url, runId).catch((err) => {
+    console.error(`Unhandled error in background acquisition run ${runId}:`, err);
+  });
+
+  return { kind: "started", runId };
+}
+
+async function runAcquisitionInBackground(adapter: SourceAdapter, url: string, runId: number): Promise<void> {
+  const { runs } = repos();
   try {
-    const { auctionIdentifier: id, pages, method } = await acquireAuction(url);
+    const { auctionIdentifier: id, pages, method } = await adapter.acquire(url, (currentPage, totalPages) => {
+      repos().runs.updateProgress(runId, currentPage, totalPages);
+    });
     const { dir } = await saveSourcePages(
-      id,
+      adapter.storageKey(id),
       pages.map((p, i) => ({ html: p.html, label: i === 0 ? "source" : `source-p${i + 1}` })),
       { originalUrl: url, acquisitionMethod: method, httpStatus: pages[0]!.httpStatus, contentType: pages[0]!.contentType },
     );
-    const result = persistPages(url, pages, method, dir);
-    repos().runs.complete(runId, { status: "success", rawFilePath: dir, auctionId: result.auction.id });
-    return { ...result, created: true };
+    const result = persistPages(adapter, url, pages, method, dir);
+    runs.complete(runId, { status: "success", rawFilePath: dir, auctionId: result.auction.id });
   } catch (err) {
     const mapped = mapAcquisitionError(err, url);
-    repos().runs.complete(runId, {
+    runs.complete(runId, {
       status: mapped.kind === "blocked" ? "blocked" : mapped.kind === "unsupported" ? "unsupported" : "failed",
       rawFilePath: null,
       auctionId: null,
       errorMessage: mapped.message,
     });
-    throw mapped;
   }
 }
 
@@ -160,15 +198,16 @@ export async function refreshAuction(auctionId: number): Promise<PersistResult> 
   const existing = auctions.findById(auctionId);
   if (!existing) throw new IngestionError("Auction not found.", "not-found");
 
+  const adapter = selectAdapter(existing.sourceUrl);
   const runId = repos().runs.start(existing.sourceUrl, "http");
   try {
-    const { auctionIdentifier: id, pages, method } = await acquireAuction(existing.sourceUrl);
+    const { auctionIdentifier: id, pages, method } = await adapter.acquire(existing.sourceUrl);
     const { dir } = await saveSourcePages(
-      id,
+      adapter.storageKey(id),
       pages.map((p, i) => ({ html: p.html, label: i === 0 ? "source" : `source-p${i + 1}` })),
       { originalUrl: existing.sourceUrl, acquisitionMethod: method, httpStatus: pages[0]!.httpStatus, contentType: pages[0]!.contentType },
     );
-    const result = persistPages(existing.sourceUrl, pages, method, dir);
+    const result = persistPages(adapter, existing.sourceUrl, pages, method, dir);
     repos().runs.complete(runId, { status: "success", rawFilePath: dir, auctionId: result.auction.id });
     return result;
   } catch (err) {
@@ -189,7 +228,10 @@ export async function reimportAuctionSource(auctionId: number): Promise<PersistR
   const existing = auctions.findById(auctionId);
   if (!existing) throw new IngestionError("Auction not found.", "not-found");
 
-  const saved = await loadSavedSource(existing.auctionIdentifier);
+  const adapter = selectAdapter(existing.sourceUrl);
+  const storageKey = adapter.storageKey(existing.auctionIdentifier);
+
+  const saved = await loadSavedSource(storageKey);
   if (!saved) {
     throw new IngestionError(
       "No saved source is available for this auction. Use Refresh to fetch it again first.",
@@ -197,7 +239,7 @@ export async function reimportAuctionSource(auctionId: number): Promise<PersistR
     );
   }
 
-  const pages: RawSource[] = saved.pages.map((html, i) => ({
+  const pages: RawSource[] = saved.pages.map((html) => ({
     html,
     finalUrl: existing.sourceUrl,
     httpStatus: saved.metadata.httpStatus ?? 0,
@@ -206,10 +248,10 @@ export async function reimportAuctionSource(auctionId: number): Promise<PersistR
 
   const runId = repos().runs.start(existing.sourceUrl, "local-file");
   try {
-    const result = persistPages(existing.sourceUrl, pages, saved.metadata.acquisitionMethod, sourceDirFor(existing.auctionIdentifier));
+    const result = persistPages(adapter, existing.sourceUrl, pages, saved.metadata.acquisitionMethod, sourceDirFor(storageKey));
     repos().runs.complete(runId, {
       status: "success",
-      rawFilePath: sourceDirFor(existing.auctionIdentifier),
+      rawFilePath: sourceDirFor(storageKey),
       auctionId: result.auction.id,
     });
     return result;
@@ -226,7 +268,7 @@ export async function reimportAuctionSource(auctionId: number): Promise<PersistR
   }
 }
 
-/** POST /api/import/local - Strategy C: parses a manually-saved HTML page (no network request). */
+/** POST /api/import/local - Strategy C: parses a manually-saved HTML page (no network request). Biddr only - see README. */
 export async function importLocalAuctionPage(
   content: string,
   declaredSourceUrl: string | null,
@@ -242,7 +284,7 @@ export async function importLocalAuctionPage(
   }
 
   const url = declaredSourceUrl ?? extractUrlFromOpenGraph(source.html) ?? source.finalUrl;
-  const auctionIdentifier = getQueryParam(url, "a");
+  const auctionIdentifier = biddrAdapter.parseAuctionIdentifier(url);
   if (!auctionIdentifier) {
     throw new IngestionError(
       "Could not determine the auction id from this page. Make sure you saved a Biddr auction catalogue page (URL containing ?a=...).",
@@ -251,17 +293,17 @@ export async function importLocalAuctionPage(
   }
 
   const { auctions } = repos();
-  const wasExisting = auctions.findByIdentifier("biddr.com", auctionIdentifier) !== null;
+  const wasExisting = auctions.findByIdentifier(biddrAdapter.sourceDomain, auctionIdentifier) !== null;
 
   const runId = repos().runs.start(url, "local-file");
   try {
-    const { dir } = await saveSourcePages(auctionIdentifier, [{ html: source.html, label: "source" }], {
+    const { dir } = await saveSourcePages(biddrAdapter.storageKey(auctionIdentifier), [{ html: source.html, label: "source" }], {
       originalUrl: url,
       acquisitionMethod: "local-file",
       httpStatus: null,
       contentType: "text/html",
     });
-    const result = persistPages(url, [source], "local-file", dir);
+    const result = persistPages(biddrAdapter, url, [source], "local-file", dir);
     repos().runs.complete(runId, { status: "success", rawFilePath: dir, auctionId: result.auction.id });
     return { ...result, created: !wasExisting };
   } catch (err) {

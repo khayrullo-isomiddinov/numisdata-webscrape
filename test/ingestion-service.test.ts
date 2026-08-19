@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { getDb } from "../src/database/schema.ts";
 import { LotRepository } from "../src/database/repositories/lot-repository.ts";
 import { persistPages } from "../src/web/services/ingestion-service.ts";
+import { biddrAdapter } from "../src/acquisition/biddr-adapter.ts";
 
 const FIXTURE = join(import.meta.dir, "fixtures", "auctions", "thecoincabinet-7356-p1.html");
 const SOURCE_URL = "https://www.biddr.com/thecoincabinet/auction?a=7356";
@@ -20,7 +21,7 @@ const SOURCE_URL = "https://www.biddr.com/thecoincabinet/auction?a=7356";
 describe("persistPages exclusion handling", () => {
   test("a deleted lot does not reappear when the same source is re-parsed (Refresh/Re-import)", () => {
     const html = readFileSync(FIXTURE, "utf-8");
-    const first = persistPages(SOURCE_URL, [{ html, finalUrl: SOURCE_URL, httpStatus: 200, contentType: "text/html" }], "http", null);
+    const first = persistPages(biddrAdapter, SOURCE_URL, [{ html, finalUrl: SOURCE_URL, httpStatus: 200, contentType: "text/html" }], "http", null);
     expect(first.lotCount).toBe(100);
 
     const db = getDb();
@@ -33,7 +34,7 @@ describe("persistPages exclusion handling", () => {
     expect(lots.findByIdentifier("8994006")).toBeNull();
 
     // Re-parsing the exact same source (as Refresh/Re-import would) must respect the exclusion.
-    const second = persistPages(SOURCE_URL, [{ html, finalUrl: SOURCE_URL, httpStatus: 200, contentType: "text/html" }], "http", null);
+    const second = persistPages(biddrAdapter, SOURCE_URL, [{ html, finalUrl: SOURCE_URL, httpStatus: 200, contentType: "text/html" }], "http", null);
     expect(second.lotCount).toBe(99);
     expect(lots.findByIdentifier("8994006")).toBeNull();
     expect(lots.listForAuction(first.auction.id).length).toBe(99);

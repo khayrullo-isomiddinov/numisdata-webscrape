@@ -8,7 +8,7 @@ export function TopBar({ navigate, onSearch }: { navigate: (path: string) => voi
     <header className="topbar">
       <Link to="/" navigate={navigate} className="topbar-brand">
         <span className="mark">Numismatic Archive</span>
-        <span className="tagline">Personal Biddr research tool</span>
+        <span className="tagline">Personal numismatic research tool</span>
       </Link>
       <div className="topbar-nav">
         <form

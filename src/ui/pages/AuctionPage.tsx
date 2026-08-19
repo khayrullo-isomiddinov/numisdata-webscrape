@@ -152,7 +152,7 @@ export function AuctionPage({ id, navigate }: { id: string; navigate: (path: str
             Imported {formatDateTime(auction.importedAt)} via {auction.acquisitionMethod} · last updated {formatDateTime(auction.updatedAt)}
           </span>
           <a href={auction.sourceUrl} target="_blank" rel="noreferrer">
-            View original on Biddr ↗
+            View original listing ↗
           </a>
         </div>
       </div>

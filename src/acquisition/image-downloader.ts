@@ -1,9 +1,9 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { assertSafeBiddrUrl } from "./url-safety.ts";
-import { getCrawlDelayMs } from "./robots.ts";
+import { assertSafeBiddrUrl, assertSafeSixbidUrl } from "./url-safety.ts";
+import { getCrawlDelayMs, USER_AGENT } from "./robots.ts";
+import { SIXBID_USER_AGENT } from "./sixbid-api.ts";
 import { waitForTurn } from "./rate-limit.ts";
-import { USER_AGENT } from "./robots.ts";
 
 const IMAGES_ROOT = join(process.cwd(), "data", "images");
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
@@ -18,13 +18,25 @@ export class ImageDownloadError extends Error {}
  * consciously opt into archiving.
  */
 export async function downloadImage(sourceUrl: string, lotIdentifier: string, order: number): Promise<string> {
-  const url = assertSafeBiddrUrl(sourceUrl);
+  let url: URL;
+  let userAgent: string;
+  let crawlDelay: number | null = null;
+  try {
+    url = assertSafeBiddrUrl(sourceUrl);
+    userAgent = USER_AGENT;
+    crawlDelay = await getCrawlDelayMs(url);
+  } catch {
+    // Not a Biddr image URL - try sixbid's image-cdn host instead. sixbid has no crawl-delay to
+    // read (robots.txt disallows its data hosts entirely, see sixbid-api.ts), so waitForTurn
+    // below falls back to its own conservative default.
+    url = assertSafeSixbidUrl(sourceUrl);
+    userAgent = SIXBID_USER_AGENT;
+  }
 
-  const crawlDelay = await getCrawlDelayMs(url);
   await waitForTurn(url.hostname, crawlDelay ?? undefined);
 
   const response = await fetch(url, {
-    headers: { "User-Agent": USER_AGENT },
+    headers: { "User-Agent": userAgent },
     signal: AbortSignal.timeout(20_000),
   });
 

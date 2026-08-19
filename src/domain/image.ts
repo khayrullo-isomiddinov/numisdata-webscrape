@@ -21,4 +21,8 @@ export interface AcquisitionRun {
   acquisitionMethod: AcquisitionMethod;
   errorMessage: string | null;
   rawFilePath: string | null;
+  auctionId: number | null;
+  /** Page-by-page progress while the run is still in flight (completedAt === null). */
+  currentPage: number | null;
+  totalPages: number | null;
 }

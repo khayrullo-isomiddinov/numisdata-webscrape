@@ -1,10 +1,13 @@
 # Numismatic Archive
 
-A personal, local-first archive tool for public [Biddr](https://www.biddr.com) auction catalogues.
-Paste a public auction URL, it retrieves the page conservatively, extracts auction/lot metadata,
-and stores it in a local SQLite database with a numismatic-catalogue-style UI.
+A personal, local-first archive tool for public auction catalogues, currently
+[Biddr](https://www.biddr.com) and [sixbid.com](https://www.sixbid.com). Paste a public auction
+URL, it retrieves the page conservatively, extracts auction/lot metadata, and stores it in a
+local SQLite database with a numismatic-catalogue-style UI.
 
-This is a research/archive tool, not a scraping service — see "Acquisition & legal principle" below.
+This is a research/archive tool, not a scraping service — see "Sources" and "Legal/technical
+principle" below (the two sources are held to different standards; read both before assuming
+either one's rules apply to the other).
 
 ## Run it
 
@@ -31,10 +34,11 @@ URL → Acquisition (src/acquisition) → Raw HTML → Extraction (src/extractio
 
 - **Acquisition** (`src/acquisition/`): a conservative HTTP client (`http.ts`) that respects
   robots.txt, rate-limits to Biddr's own `Crawl-delay`, validates URLs against SSRF (https-only,
-  biddr.com host allowlist, private-IP checks on every redirect hop), and stops immediately on
+  per-source host allowlists, private-IP checks on every redirect hop), and stops immediately on
   any sign of a CAPTCHA/block rather than retrying around it. `browser.ts` is an optional
   Playwright fallback for client-rendered pages (not currently needed for Biddr - see below).
-  `local-file.ts` wraps a browser-saved HTML upload into the same shape.
+  `local-file.ts` wraps a browser-saved HTML upload into the same shape. sixbid.com's JSON-API
+  client (`sixbid-api.ts`) is the one exception to the robots.txt rule - see "Sources" below.
 - **Extraction** (`src/extraction/`) doesn't care where the HTML came from. Biddr auction/lot
   pages are server-rendered HTML with stable class names (`.catalog-title`, `.catalog-lot`,
   `.lot-price`, ...) - there's no JSON-LD or embedded app-state JSON for auction/lot data
@@ -51,7 +55,31 @@ URL → Acquisition (src/acquisition) → Raw HTML → Extraction (src/extractio
 - **UI** (`src/ui/`): React via Bun's HTML import + bundler, hand-written CSS (no framework),
   a ~40-line client-side router (three routes don't need a router library).
 
-## Acquisition strategy
+## Sources
+
+Each source has its own `src/acquisition/*-adapter.ts` implementing a small `SourceAdapter`
+interface (`src/acquisition/source-adapter.ts`); `ingestion-service.ts` picks the matching
+adapter for a pasted URL and drives Retrieve/Refresh/Re-import through it generically.
+
+- **Biddr**: server-rendered HTML pages. See "Biddr acquisition strategy" below.
+- **sixbid.com**: the page you paste is a client-rendered Vue SPA shell; the real data comes from
+  a separate backing JSON API (`lots.sixbid.com/v2/{companySlug}/{auctionId}/`), fetched directly
+  with plain `fetch()` — one call per page of lots, no browser needed. Unlike Biddr, that one call
+  already returns full per-lot detail (no separate lot-detail-page fetch), and it's scoped to
+  **live auctions only**; auctions that have moved to sixbid's separate, unvetted archive site are
+  detected and reported rather than silently followed there.
+
+  **This one is honest to flag**: `lots.sixbid.com`'s `robots.txt` is a blanket `Disallow: /` for
+  all crawlers (`www.sixbid.com`, the page a human browses, is separately permissive — but it
+  serves no data itself). This app fetches from `lots.sixbid.com` anyway. That was a deliberate,
+  informed choice, not an oversight: sixbid.com's Terms of Use (unlike Biddr's or acsearch.info's)
+  don't reachably state a scraper prohibition, this is a personal cataloguing tool operating at
+  low volume against publicly viewable auction data, and the choice was made explicitly rather
+  than defaulted into. If that calculus changes, `src/acquisition/sixbid-api.ts` is the one place
+  in this codebase that skips the robots.txt check — everything else (SSRF allowlisting, rate
+  limiting, size/time bounds, archived-auction detection) still applies.
+
+## Biddr acquisition strategy
 
 1. **HTTP** (`Strategy A`): plain `fetch()` with an identifiable User-Agent. This is sufficient
    for Biddr — auction/lot catalogue pages are fully present in the initial HTML response, not
@@ -96,5 +124,11 @@ network) are distinct actions/endpoints, matching the spec's semantics.
 ## Legal/technical principle
 
 Acquire only content you can already legitimately access via ordinary means; never bypass a
-CAPTCHA, login wall, rate limit, or robots.txt. If automatic retrieval can't safely proceed, the
-app says so and points you at the local-import fallback instead of trying harder.
+CAPTCHA, login wall, or rate limit. If automatic retrieval can't safely proceed, the app says so
+and points you at the local-import fallback instead of trying harder.
+
+Biddr and acsearch.info's Terms of Use explicitly forbid scrapers/bots - this app does not fetch
+from acsearch.info at all, and never bypasses Biddr's robots.txt (see `robots.ts`). sixbid.com is
+a deliberate, disclosed exception to the robots.txt half of this principle specifically - see
+"Sources" above for why, and don't quietly extend that exception to any other site without the
+same explicit reasoning.

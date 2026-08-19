@@ -116,6 +116,20 @@ export interface LotImageDto {
   height: number | null;
 }
 
+export interface AcquisitionRunDto {
+  id: number;
+  status: "success" | "blocked" | "failed" | "unsupported";
+  completedAt: string | null;
+  auctionId: number | null;
+  currentPage: number | null;
+  totalPages: number | null;
+  errorMessage: string | null;
+}
+
+export type RetrieveResult =
+  | { status: "complete"; created: false; auctionId: number; lotCount: number }
+  | { status: "in-progress"; runId: number };
+
 export const api = {
   listAuctions: () => request<{ auctions: AuctionSummary[] }>("/api/auctions"),
 
@@ -136,10 +150,12 @@ export const api = {
     ),
 
   retrieve: (url: string) =>
-    request<{ auctionId: number; created: boolean; lotCount: number; status: string }>("/api/acquisitions", {
+    request<RetrieveResult>("/api/acquisitions", {
       method: "POST",
       body: JSON.stringify({ url }),
     }),
+
+  getAcquisitionRun: (runId: number) => request<{ run: AcquisitionRunDto }>(`/api/acquisitions/${runId}`),
 
   refreshAuction: (id: number) => request<{ auctionId: number; lotCount: number }>(`/api/auctions/${id}/refresh`, { method: "POST" }),
 

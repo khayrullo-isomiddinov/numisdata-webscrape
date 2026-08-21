@@ -15,6 +15,7 @@ const server = Bun.serve({
     "/auctions/:id": index,
     "/lots/:id": index,
     "/search": index,
+    "/guide": index,
   },
   // Bun's default is 10s. Retrieve/Refresh acquire every page of an auction in one request,
   // rate-limited to ~3s/page (see rate-limit.ts) - a sixbid auction with 8 pages alone takes

@@ -28,11 +28,28 @@ describe("parsePrice", () => {
     expect(parsePrice("")).toBeNull();
     expect(parsePrice("no price here")).toBeNull();
   });
+
+  test("parses a narrow-no-break-space thousands separator (numisbids' large-amount display) without dropping digits", () => {
+    expect(parsePrice("250 000 USD")).toEqual({ amount: 250000, currency: "USD" });
+    expect(parsePrice("183 838 GBP")).toEqual({ amount: 183838, currency: "GBP" });
+  });
+
+  test("a range's ' - ' separator is not merged away by the digit-grouping-space fix", () => {
+    // "500 - 700" has a non-digit (the dash) between the two numbers, so the fix that merges
+    // "250 000" into "250000" must not also merge this into one number - parsePrice picks up
+    // the second number here (pre-existing behavior for a bare range with no dedicated parser;
+    // parsePriceRange below is the function actually meant for ranges).
+    expect(parsePrice("500 - 700 GBP")).toEqual({ amount: 700, currency: "GBP" });
+  });
 });
 
 describe("parsePriceRange", () => {
   test("parses a low-high range", () => {
     expect(parsePriceRange("500 - 700 GBP")).toEqual({ low: 500, high: 700, currency: "GBP" });
+  });
+
+  test("parses a range where each side uses a narrow-no-break-space thousands separator", () => {
+    expect(parsePriceRange("500 000 - 700 000 USD")).toEqual({ low: 500000, high: 700000, currency: "USD" });
   });
 
   test("treats a single value as low === high", () => {

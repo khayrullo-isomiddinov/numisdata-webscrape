@@ -28,6 +28,9 @@ export function AuctionPage({ id, navigate }: { id: string; navigate: (path: str
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [confirmingArchiveDelete, setConfirmingArchiveDelete] = useState(false);
+  const [archiveDeleteBusy, setArchiveDeleteBusy] = useState(false);
+  const [archiveDeleteError, setArchiveDeleteError] = useState<string | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -100,6 +103,19 @@ export function AuctionPage({ id, navigate }: { id: string; navigate: (path: str
     }
   }
 
+  async function handleConfirmArchiveDelete() {
+    setArchiveDeleteBusy(true);
+    setArchiveDeleteError(null);
+    try {
+      await api.deleteAuction(Number(id));
+      navigate("/");
+    } catch (err) {
+      setArchiveDeleteError(err instanceof ApiError ? err.payload.error : "Could not delete this archive.");
+    } finally {
+      setArchiveDeleteBusy(false);
+    }
+  }
+
   if (notFound) {
     return (
       <div className="page empty-state">
@@ -133,6 +149,9 @@ export function AuctionPage({ id, navigate }: { id: string; navigate: (path: str
             </button>
             <button className="btn btn-sm" onClick={() => runAction("reimport")} disabled={busyAction !== null}>
               {busyAction === "reimport" ? "Re-importing..." : "Re-import source"}
+            </button>
+            <button className="btn btn-sm btn-danger" onClick={() => setConfirmingArchiveDelete(true)}>
+              Delete Archive
             </button>
           </div>
         </div>
@@ -226,6 +245,23 @@ export function AuctionPage({ id, navigate }: { id: string; navigate: (path: str
           busy={deleteBusy}
           onConfirm={handleConfirmDelete}
           onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
+
+      {confirmingArchiveDelete && (
+        <ConfirmModal
+          title="Delete archive?"
+          message={`This permanently deletes "${auction.title ?? `Auction #${auction.id}`}" from the database, along with every saved page snapshot and downloaded image. This can't be undone.`}
+          confirmLabel="Delete Permanently"
+          danger
+          busy={archiveDeleteBusy}
+          error={archiveDeleteError}
+          onConfirm={handleConfirmArchiveDelete}
+          onCancel={() => {
+            if (archiveDeleteBusy) return;
+            setConfirmingArchiveDelete(false);
+            setArchiveDeleteError(null);
+          }}
         />
       )}
     </div>

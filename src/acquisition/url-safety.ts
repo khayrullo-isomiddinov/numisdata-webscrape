@@ -9,6 +9,9 @@ export class UnsafeUrlError extends Error {
 
 const BIDDR_ALLOWED_HOSTS = [/^biddr\.com$/i, /^www\.biddr\.com$/i, /^media\.biddr\.com$/i, /^[a-z0-9-]+\.biddr\.com$/i];
 const SIXBID_ALLOWED_HOSTS = [/^www\.sixbid\.com$/i, /^lots\.sixbid\.com$/i, /^image-cdn\.sixbid\.com$/i];
+const JESUSVICO_ALLOWED_HOSTS = [/^www\.jesusvico\.com$/i, /^jesusvico\.com$/i];
+const NUMISBIDS_ALLOWED_HOSTS = [/^www\.numisbids\.com$/i, /^media\.numisbids\.com$/i, /^static\.numisbids\.com$/i];
+const AUREO_ALLOWED_HOSTS = [/^www\.aureo\.com$/i, /^aureo\.com$/i, /^media\.aureo\.com$/i];
 
 /**
  * This is a personal archive tool for a small, known set of auction sites, not a general-purpose
@@ -53,6 +56,36 @@ export function assertSafeSixbidUrl(rawUrl: string): URL {
     SIXBID_ALLOWED_HOSTS,
     "Please provide a valid sixbid.com auction URL.",
     "Only sixbid.com URLs are supported.",
+  );
+}
+
+/** Allowlists jesusvico.com - both the auction pages and its own image host (www.jesusvico.com/img/...). */
+export function assertSafeJesusvicoUrl(rawUrl: string): URL {
+  return assertSafeKnownHost(
+    rawUrl,
+    JESUSVICO_ALLOWED_HOSTS,
+    "Please provide a valid jesusvico.com auction URL.",
+    "Only jesusvico.com URLs are supported.",
+  );
+}
+
+/** Allowlists numisbids.com - the sale/lot pages plus its own image and static-asset hosts. */
+export function assertSafeNumisbidsUrl(rawUrl: string): URL {
+  return assertSafeKnownHost(
+    rawUrl,
+    NUMISBIDS_ALLOWED_HOSTS,
+    "Please provide a valid numisbids.com sale URL.",
+    "Only numisbids.com URLs are supported.",
+  );
+}
+
+/** Allowlists aureo.com - the auction/archive pages, its AJAX endpoints under the same host, and its own image host. */
+export function assertSafeAureoUrl(rawUrl: string): URL {
+  return assertSafeKnownHost(
+    rawUrl,
+    AUREO_ALLOWED_HOSTS,
+    "Please provide a valid aureo.com auction URL.",
+    "Only aureo.com URLs are supported.",
   );
 }
 

@@ -40,9 +40,10 @@ export function Link({ to, navigate, className, children }: { to: string; naviga
 
 export function matchRoute(
   location: string,
-): { route: "home" | "auction" | "lot" | "search" | "not-found"; id?: string; query?: string } {
+): { route: "home" | "auction" | "lot" | "search" | "guide" | "not-found"; id?: string; query?: string } {
   const [pathname, search] = location.split("?");
   if (pathname === "/" || pathname === "" || pathname === undefined) return { route: "home" };
+  if (pathname === "/guide") return { route: "guide" };
   if (pathname === "/search") return { route: "search", query: new URLSearchParams(search ?? "").get("q") ?? "" };
   const auctionMatch = pathname.match(/^\/auctions\/(\d+)\/?$/);
   if (auctionMatch) return { route: "auction", id: auctionMatch[1] };

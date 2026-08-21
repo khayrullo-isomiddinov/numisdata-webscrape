@@ -13,9 +13,9 @@ import { readFileSync } from "node:fs";
 import { getDb } from "../src/database/schema.ts";
 import { LotRepository } from "../src/database/repositories/lot-repository.ts";
 import { persistPages } from "../src/web/services/ingestion-service.ts";
-import { biddrAdapter } from "../src/acquisition/biddr-adapter.ts";
+import { biddrAdapter } from "../src/sources/biddr/adapter.ts";
 
-const FIXTURE = join(import.meta.dir, "fixtures", "auctions", "thecoincabinet-7356-p1.html");
+const FIXTURE = join(import.meta.dir, "sources", "biddr", "fixtures", "auctions", "thecoincabinet-7356-p1.html");
 const SOURCE_URL = "https://www.biddr.com/thecoincabinet/auction?a=7356";
 
 describe("persistPages exclusion handling", () => {

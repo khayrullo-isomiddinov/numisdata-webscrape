@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PARSER_VERSION } from "../extraction/parser-utils.ts";
 import type { AcquisitionMethod } from "../domain/image.ts";
@@ -90,4 +90,15 @@ export async function hasSavedSource(auctionIdentifier: string): Promise<boolean
 
 export function sourceDirFor(auctionIdentifier: string): string {
   return directoryFor(auctionIdentifier);
+}
+
+/**
+ * Deletes a saved raw-source directory outright, given the exact path stored on the auction row
+ * (auctions.raw_source_path) rather than re-deriving it from an identifier - avoids any risk of
+ * drift if a source's storageKey scheme ever changes after the fact. A no-op if the path is null
+ * or already gone.
+ */
+export async function deleteSourceDir(dir: string | null): Promise<void> {
+  if (!dir) return;
+  await rm(dir, { recursive: true, force: true });
 }

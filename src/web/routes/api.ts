@@ -1,5 +1,6 @@
 import { handleCreateAcquisition, handleGetAcquisition } from "../controllers/acquisitions-controller.ts";
 import {
+  handleDeleteAuction,
   handleDeleteLots,
   handleGetAuction,
   handleListAuctions,
@@ -27,6 +28,7 @@ export const apiRoutes = {
   },
   "/api/auctions/:id": {
     GET: handleGetAuction,
+    DELETE: handleDeleteAuction,
   },
   "/api/auctions/:id/refresh": {
     POST: handleRefreshAuction,

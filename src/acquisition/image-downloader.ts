@@ -1,8 +1,8 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { assertSafeBiddrUrl, assertSafeSixbidUrl } from "./url-safety.ts";
-import { getCrawlDelayMs, USER_AGENT } from "./robots.ts";
-import { SIXBID_USER_AGENT } from "./sixbid-api.ts";
+import { assertSafeAureoUrl, assertSafeBiddrUrl, assertSafeJesusvicoUrl, assertSafeNumisbidsUrl, assertSafeSixbidUrl } from "./url-safety.ts";
+import { getCrawlDelayMs } from "./robots.ts";
+import { USER_AGENT } from "./user-agent.ts";
 import { waitForTurn } from "./rate-limit.ts";
 
 const IMAGES_ROOT = join(process.cwd(), "data", "images");
@@ -26,11 +26,34 @@ export async function downloadImage(sourceUrl: string, lotIdentifier: string, or
     userAgent = USER_AGENT;
     crawlDelay = await getCrawlDelayMs(url);
   } catch {
-    // Not a Biddr image URL - try sixbid's image-cdn host instead. sixbid has no crawl-delay to
-    // read (robots.txt disallows its data hosts entirely, see sixbid-api.ts), so waitForTurn
-    // below falls back to its own conservative default.
-    url = assertSafeSixbidUrl(sourceUrl);
-    userAgent = SIXBID_USER_AGENT;
+    try {
+      // jesusvico.com also respects robots.txt fully (see sources/jesusvico/acquisition.ts) -
+      // same crawl-delay-aware discipline as Biddr.
+      url = assertSafeJesusvicoUrl(sourceUrl);
+      userAgent = USER_AGENT;
+      crawlDelay = await getCrawlDelayMs(url);
+    } catch {
+      try {
+        // aureo.com also respects robots.txt fully (see sources/aureo/acquisition.ts) - same
+        // crawl-delay-aware discipline as Biddr/jesusvico.
+        url = assertSafeAureoUrl(sourceUrl);
+        userAgent = USER_AGENT;
+        crawlDelay = await getCrawlDelayMs(url);
+      } catch {
+        try {
+          // Not a Biddr, jesusvico, or aureo image URL - try sixbid's image-cdn host instead.
+          // sixbid has no crawl-delay to read (robots.txt disallows its data hosts entirely, see
+          // sources/sixbid/api.ts), so waitForTurn below falls back to its own conservative default.
+          url = assertSafeSixbidUrl(sourceUrl);
+          userAgent = USER_AGENT;
+        } catch {
+          // Not sixbid either - try numisbids' media host. Same no-crawl-delay-to-read situation as
+          // sixbid (see sources/numisbids/acquisition.ts's fetchNumisbidsPage disclosure).
+          url = assertSafeNumisbidsUrl(sourceUrl);
+          userAgent = USER_AGENT;
+        }
+      }
+    }
   }
 
   await waitForTurn(url.hostname, crawlDelay ?? undefined);
@@ -57,6 +80,11 @@ export async function downloadImage(sourceUrl: string, lotIdentifier: string, or
   const relativePath = join("images", safeLotId, `${order}${ext}`);
   await Bun.write(join(process.cwd(), "data", relativePath), buffer);
   return relativePath;
+}
+
+/** Deletes every locally-downloaded image for one lot (its whole data/images/<lotId>/ directory), if any exist. */
+export async function deleteLotImages(lotId: number): Promise<void> {
+  await rm(join(IMAGES_ROOT, String(lotId)), { recursive: true, force: true });
 }
 
 function extensionFor(contentType: string, pathname: string): string {

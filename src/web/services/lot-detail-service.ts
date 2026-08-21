@@ -2,17 +2,19 @@ import { getDb } from "../../database/schema.ts";
 import { AuctionRepository } from "../../database/repositories/auction-repository.ts";
 import { LotRepository } from "../../database/repositories/lot-repository.ts";
 import { ImageRepository } from "../../database/repositories/image-repository.ts";
-import { fetchPublicPage } from "../../acquisition/http.ts";
-import { parseLotDetail } from "../../extraction/lot-parser.ts";
+import { selectAdapterByUrl } from "../../sources/registry.ts";
 import type { Lot } from "../../domain/lot.ts";
 import type { LotImage } from "../../domain/image.ts";
 
 /**
- * Full per-lot detail (weight, composition, untruncated description, full image carousel) only
- * lives on Biddr's individual lot pages. Fetching all of those during the initial auction
- * retrieval would mean hundreds of extra requests per auction, which conflicts with "don't
- * aggressively crawl Biddr". Instead we fetch a lot's detail page lazily, the first time it's
- * actually opened in the archive, and persist the result so it's never re-fetched after that.
+ * Full per-lot detail (weight, composition, untruncated description, full image carousel/gallery)
+ * only lives on a source's individual lot pages for some sources (Biddr, jesusvico.com) - fetching
+ * all of those during the initial auction retrieval would mean hundreds of extra requests, which
+ * conflicts with "don't aggressively crawl". Instead we fetch a lot's detail page lazily, the
+ * first time it's actually opened in the archive, and persist the result so it's never re-fetched
+ * after that. Dispatches through the owning auction's SourceAdapter (sources/registry.ts) - a
+ * source whose listing already carries everything (sixbid) sets detailFetched: true up front and
+ * never reaches this function's fetch path at all.
  */
 export async function ensureLotDetail(lotId: number): Promise<{ lot: Lot; images: LotImage[]; detailFetchError: string | null }> {
   const db = getDb();
@@ -27,9 +29,14 @@ export async function ensureLotDetail(lotId: number): Promise<{ lot: Lot; images
     return { lot, images: images.listForLot(lot.id), detailFetchError: null };
   }
 
+  const auction = auctions.findById(lot.auctionId);
+  const adapter = auction ? selectAdapterByUrl(auction.sourceUrl) : null;
+  if (!adapter?.fetchLotDetail) {
+    return { lot, images: images.listForLot(lot.id), detailFetchError: null };
+  }
+
   try {
-    const raw = await fetchPublicPage(lot.sourceUrl);
-    const extracted = parseLotDetail(raw.html, lot.sourceUrl);
+    const extracted = await adapter.fetchLotDetail(lot.sourceUrl);
     if (!extracted) {
       return { lot, images: images.listForLot(lot.id), detailFetchError: "Lot detail page could not be parsed." };
     }

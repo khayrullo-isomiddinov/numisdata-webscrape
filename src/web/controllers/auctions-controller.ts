@@ -2,7 +2,7 @@ import { getDb } from "../../database/schema.ts";
 import { AuctionRepository } from "../../database/repositories/auction-repository.ts";
 import { LotRepository } from "../../database/repositories/lot-repository.ts";
 import { ImageRepository } from "../../database/repositories/image-repository.ts";
-import { refreshAuction, reimportAuctionSource } from "../services/ingestion-service.ts";
+import { deleteAuctionArchive, refreshAuction, reimportAuctionSource } from "../services/ingestion-service.ts";
 import { json, errorResponse } from "./http-helpers.ts";
 import { mediaUrl } from "../media-url.ts";
 import type { Lot } from "../../domain/lot.ts";
@@ -113,6 +113,16 @@ export async function handleReimportAuction(req: Request & { params: { id: strin
   try {
     const result = await reimportAuctionSource(Number(req.params.id));
     return json({ auctionId: result.auction.id, lotCount: result.lotCount });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+/** DELETE /api/auctions/:id - permanently removes the whole auction: its database rows and every file on disk (raw source snapshot + any downloaded images). */
+export async function handleDeleteAuction(req: Request & { params: { id: string } }): Promise<Response> {
+  try {
+    await deleteAuctionArchive(Number(req.params.id));
+    return json({ deleted: true });
   } catch (err) {
     return errorResponse(err);
   }

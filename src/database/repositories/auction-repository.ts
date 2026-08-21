@@ -141,4 +141,9 @@ export class AuctionRepository {
   touchUpdatedAt(id: number): void {
     this.db.query("UPDATE auctions SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), id);
   }
+
+  /** Deletes the auction row - lots/images cascade via their FKs, acquisition_runs.auction_id is set NULL. */
+  delete(id: number): void {
+    this.db.query("DELETE FROM auctions WHERE id = ?").run(id);
+  }
 }

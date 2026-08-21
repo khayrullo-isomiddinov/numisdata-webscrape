@@ -1,3 +1,7 @@
+import { USER_AGENT } from "./user-agent.ts";
+
+export { USER_AGENT };
+
 interface RobotsRules {
   disallow: string[];
   crawlDelaySeconds: number | null;
@@ -9,7 +13,8 @@ const CACHE_TTL_MS = 60 * 60 * 1000;
 /**
  * Fetches and caches robots.txt for a host, returning the Disallow rules that apply to a
  * generic/unnamed user-agent ("*"). We only ever act on the "*" group - Biddr's robots.txt also
- * lists named-bot blocks (AhrefsBot, SemrushBot, ...) which don't apply to an identifiable,
+ * lists named-bot blocks (AhrefsBot, 
+ * SemrushBot, ...) which don't apply to an identifiable,
  * conservative client like this one.
  */
 async function getRobotsRules(origin: string): Promise<RobotsRules> {
@@ -35,8 +40,6 @@ async function getRobotsRules(origin: string): Promise<RobotsRules> {
   cache.set(origin, { rules, fetchedAt: Date.now() });
   return rules;
 }
-
-export const USER_AGENT = "PersonalBiddrArchive/1.0 (+local personal research tool; conservative fetch rate)";
 
 function parseRobotsTxt(text: string): RobotsRules {
   const lines = text.split("\n").map((l) => l.trim());

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type AuctionSummary } from "../api.ts";
 import { Link } from "../router.tsx";
 import { formatDate } from "../format.ts";
+import { ConfirmModal } from "../components/ConfirmModal.tsx";
 
 type RetrievePhase = { kind: "starting" } | { kind: "polling"; currentPage: number | null; totalPages: number | null };
 
@@ -13,6 +14,9 @@ export function HomePage({ navigate }: { navigate: (path: string) => void }) {
   const [error, setError] = useState<{ message: string; diagnostic?: Record<string, unknown> } | null>(null);
   const [auctions, setAuctions] = useState<AuctionSummary[]>([]);
   const [importOpen, setImportOpen] = useState(false);
+  const [deletingAuction, setDeletingAuction] = useState<AuctionSummary | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const pollTimerRef = useRef<number | null>(null);
   const cancelledRef = useRef(false);
 
@@ -80,23 +84,43 @@ export function HomePage({ navigate }: { navigate: (path: string) => void }) {
     }
   }
 
+  async function handleConfirmDeleteAuction() {
+    if (!deletingAuction) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await api.deleteAuction(deletingAuction.id);
+      setAuctions((prev) => prev.filter((a) => a.id !== deletingAuction.id));
+      setDeletingAuction(null);
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.payload.error : "Could not delete this archive.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   const busy = phase !== null;
 
   return (
     <div className="page page-narrow">
-      <div className="hero">
+      <div className="retrieve-card retrieve-card-primary">
         <h1>Numismatic Archive</h1>
-        <p>Paste a public Biddr or sixbid.com auction URL to build a permanent, searchable local catalogue of coins you're tracking.</p>
-      </div>
-
-      <div className="retrieve-card">
+        <p className="retrieve-intro">
+          Paste a public Biddr, sixbid.com, jesusvico.com, numisbids.com, or aureo.com auction URL to build a
+          permanent, searchable local catalogue of coins you're tracking. See the{" "}
+          <Link to="/guide" navigate={navigate}>
+            guide
+          </Link>{" "}
+          for the exact URL formats supported.
+        </p>
         <form className="retrieve-form" onSubmit={handleRetrieve}>
           <input
             type="url"
-            placeholder="Paste a Biddr or sixbid.com auction URL..."
+            placeholder="Paste a Biddr, sixbid.com, or jesusvico.com auction URL..."
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             disabled={busy}
+            autoFocus
           />
           <button type="submit" className="btn btn-primary" disabled={busy}>
             Retrieve Auction
@@ -146,15 +170,28 @@ export function HomePage({ navigate }: { navigate: (path: string) => void }) {
           <h2>Archived auctions</h2>
           <div className="auction-row-list">
             {auctions.map((a) => (
-              <Link key={a.id} to={`/auctions/${a.id}`} navigate={navigate} className="auction-row">
-                <div>
-                  <div className="auction-row-title">{a.title ?? `Auction #${a.id}`}</div>
-                  <div className="auction-row-meta">
-                    {a.auctionHouse ?? "Unknown house"} · {a.lotCount} lots{a.startDate ? ` · ${formatDate(a.startDate)}` : ""}
+              <div key={a.id} className="auction-row">
+                <Link to={`/auctions/${a.id}`} navigate={navigate} className="auction-row-link">
+                  <div>
+                    <div className="auction-row-title">{a.title ?? `Auction #${a.id}`}</div>
+                    <div className="auction-row-meta">
+                      {a.auctionHouse ?? "Unknown house"} · {a.lotCount} lots{a.startDate ? ` · ${formatDate(a.startDate)}` : ""}
+                    </div>
                   </div>
-                </div>
-                <span className={`badge badge-status-${a.status}`}>{a.status}</span>
-              </Link>
+                  <span className={`badge badge-status-${a.status}`}>{a.status}</span>
+                </Link>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger auction-row-delete"
+                  onClick={() => {
+                    setDeleteError(null);
+                    setDeletingAuction(a);
+                  }}
+                  title="Delete this archive permanently"
+                >
+                  Delete
+                </button>
+              </div>
             ))}
           </div>
         </div>
@@ -164,6 +201,23 @@ export function HomePage({ navigate }: { navigate: (path: string) => void }) {
         <ImportModal
           onClose={() => setImportOpen(false)}
           onImported={(auctionId) => navigate(`/auctions/${auctionId}`)}
+        />
+      )}
+
+      {deletingAuction && (
+        <ConfirmModal
+          title="Delete archive?"
+          message={`This permanently deletes "${deletingAuction.title ?? `Auction #${deletingAuction.id}`}" from the database, along with every saved page snapshot and downloaded image. This can't be undone.`}
+          confirmLabel="Delete Permanently"
+          busy={deleteBusy}
+          danger
+          error={deleteError}
+          onConfirm={handleConfirmDeleteAuction}
+          onCancel={() => {
+            if (deleteBusy) return;
+            setDeletingAuction(null);
+            setDeleteError(null);
+          }}
         />
       )}
     </div>

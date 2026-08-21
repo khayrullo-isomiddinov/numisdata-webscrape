@@ -26,6 +26,9 @@ export function TopBar({ navigate, onSearch }: { navigate: (path: string) => voi
             style={{ width: "100%" }}
           />
         </form>
+        <Link to="/guide" navigate={navigate} className="topbar-guide-link">
+          Guide
+        </Link>
       </div>
     </header>
   );

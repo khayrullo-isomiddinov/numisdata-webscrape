@@ -9,13 +9,14 @@ import {
   RobotsDisallowedError,
   UnsafeUrlError,
   UnsupportedPageError,
-} from "../../acquisition/acquisition-manager.ts";
-import { SixbidArchivedError } from "../../acquisition/sixbid-api.ts";
+} from "../../sources/biddr/acquisition.ts";
+import { SixbidArchivedError } from "../../sources/sixbid/api.ts";
 import { importLocalHtml, InvalidImportError } from "../../acquisition/local-file.ts";
-import { loadSavedSource, saveSourcePages, sourceDirFor } from "../../acquisition/source-storage.ts";
-import { biddrAdapter } from "../../acquisition/biddr-adapter.ts";
-import { sixbidAdapter } from "../../acquisition/sixbid-adapter.ts";
-import type { SourceAdapter } from "../../acquisition/source-adapter.ts";
+import { deleteSourceDir, loadSavedSource, saveSourcePages, sourceDirFor } from "../../acquisition/source-storage.ts";
+import { deleteLotImages } from "../../acquisition/image-downloader.ts";
+import { selectAdapterByUrl } from "../../sources/registry.ts";
+import { biddrAdapter } from "../../sources/biddr/adapter.ts";
+import type { SourceAdapter } from "../../sources/types.ts";
 import type { RawSource } from "../../acquisition/http.ts";
 import type { Auction } from "../../domain/auction.ts";
 import type { AcquisitionMethod } from "../../domain/image.ts";
@@ -42,13 +43,14 @@ function repos() {
   };
 }
 
-/** Every source this app knows how to acquire from, tried in order against a pasted URL. */
-const ADAPTERS: SourceAdapter[] = [biddrAdapter, sixbidAdapter];
-
 function selectAdapter(rawUrl: string): SourceAdapter {
-  const adapter = ADAPTERS.find((a) => a.matchesUrl(rawUrl));
+  const adapter = selectAdapterByUrl(rawUrl);
   if (!adapter) {
-    throw new IngestionError("Please provide a valid Biddr or sixbid.com auction URL.", "invalid-url", { url: rawUrl });
+    throw new IngestionError(
+      "Please provide a valid Biddr, sixbid.com, or jesusvico.com URL.",
+      "invalid-url",
+      { url: rawUrl },
+    );
   }
   return adapter;
 }
@@ -96,7 +98,11 @@ export function persistPages(
 
 function mapAcquisitionError(err: unknown, url: string): IngestionError {
   if (err instanceof UnsafeUrlError) {
-    return new IngestionError("Please provide a valid Biddr or sixbid.com auction URL.", "invalid-url", { url });
+    return new IngestionError(
+      "Please provide a valid Biddr, sixbid.com, or jesusvico.com URL.",
+      "invalid-url",
+      { url },
+    );
   }
   if (err instanceof AcquisitionBlockedError || err instanceof RobotsDisallowedError) {
     return new IngestionError(
@@ -266,6 +272,26 @@ export async function reimportAuctionSource(auctionId: number): Promise<PersistR
       reason: err instanceof Error ? err.message : String(err),
     });
   }
+}
+
+/**
+ * DELETE /api/auctions/:id - permanently removes an entire archived auction: the database row
+ * (lots/images cascade via their FKs), the saved raw-HTML snapshot directory, and every lot's
+ * locally-downloaded image directory. Unlike deleting individual lots (LotRepository.deleteByIds),
+ * there's no exclusion list to record here - the whole auction is gone, so there's nothing left
+ * for a later Refresh/Re-import to resurrect it into.
+ */
+export async function deleteAuctionArchive(auctionId: number): Promise<void> {
+  const { auctions, lots } = repos();
+  const existing = auctions.findById(auctionId);
+  if (!existing) throw new IngestionError("Auction not found.", "not-found");
+
+  const lotIds = lots.listForAuction(auctionId).map((lot) => lot.id);
+
+  await deleteSourceDir(existing.rawSourcePath);
+  await Promise.all(lotIds.map((lotId) => deleteLotImages(lotId)));
+
+  auctions.delete(auctionId);
 }
 
 /** POST /api/import/local - Strategy C: parses a manually-saved HTML page (no network request). Biddr only - see README. */

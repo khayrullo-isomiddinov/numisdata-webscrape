@@ -167,6 +167,8 @@ export const api = {
       body: JSON.stringify({ lotIds }),
     }),
 
+  deleteAuction: (id: number) => request<{ deleted: true }>(`/api/auctions/${id}`, { method: "DELETE" }),
+
   importLocal: (file: File, sourceUrl: string) => {
     const form = new FormData();
     form.set("file", file);

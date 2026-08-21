@@ -4,6 +4,7 @@ export function ConfirmModal({
   confirmLabel,
   busy,
   danger,
+  error,
   onConfirm,
   onCancel,
 }: {
@@ -12,6 +13,7 @@ export function ConfirmModal({
   confirmLabel: string;
   busy: boolean;
   danger?: boolean;
+  error?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -20,6 +22,7 @@ export function ConfirmModal({
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>{title}</h2>
         <p>{message}</p>
+        {error && <div className="error-banner">{error}</div>}
         <div className="modal-actions">
           <button className="btn btn-sm" onClick={onCancel} disabled={busy}>
             Cancel

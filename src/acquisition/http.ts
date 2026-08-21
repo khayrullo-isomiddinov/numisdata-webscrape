@@ -1,6 +1,7 @@
-import { assertSafeBiddrUrl, assertNotPrivateHost } from "./url-safety.ts";
+import { assertNotPrivateHost } from "./url-safety.ts";
 import { getCrawlDelayMs, isAllowedByRobots, USER_AGENT } from "./robots.ts";
 import { waitForTurn } from "./rate-limit.ts";
+import { looksBlocked } from "./block-signals.ts";
 
 export interface RawSource {
   html: string;
@@ -27,25 +28,24 @@ const MAX_REDIRECTS = 5;
 const MAX_BODY_BYTES = 20 * 1024 * 1024; // 20MB - generous for a catalogue page, still bounded.
 const REQUEST_TIMEOUT_MS = 20_000;
 
-const BLOCK_SIGNALS = [
-  /captcha/i,
-  /are you a human/i,
-  /access denied/i,
-  /cloudflare.*(checking|challenge)/i,
-  /just a moment/i,
-  /unusual traffic/i,
-  /forbidden/i,
-];
+export interface FetchPageOptions {
+  /** Validates the URL is https + a known host for this source; throws UnsafeUrlError otherwise. */
+  assertSafeUrl: (rawUrl: string) => URL;
+  /** Whether a redirect target's hostname still belongs to this source - refuses to follow off it. */
+  allowRedirectHost: (hostname: string) => boolean;
+}
 
 /**
- * Performs a conservative, identifiable HTTP GET against a public Biddr URL: https-only,
- * SSRF-checked (including on every redirect hop), robots.txt-respecting, rate-limited to the
- * site's own Crawl-delay, size- and time-bounded. Throws AcquisitionBlockedError if the response
- * looks like a CAPTCHA/bot-block/access wall rather than a normal page - callers must not retry
- * around that, only report it and offer the manual-import fallback.
+ * Performs a conservative, identifiable HTTP GET against a public URL: https-only, SSRF-checked
+ * (including on every redirect hop), robots.txt-respecting, rate-limited to the site's own
+ * Crawl-delay, size- and time-bounded. Throws AcquisitionBlockedError if the response looks like a
+ * CAPTCHA/bot-block/access wall rather than a normal page - callers must not retry around that,
+ * only report it and offer the manual-import fallback. Parameterized by source (assertSafeUrl /
+ * allowRedirectHost) so Biddr and jesusvico.com - both robots-respecting sources - share this one
+ * implementation rather than each having their own copy.
  */
-export async function fetchPublicPage(rawUrl: string): Promise<RawSource> {
-  let currentUrl = assertSafeBiddrUrl(rawUrl);
+export async function fetchPublicPage(rawUrl: string, options: FetchPageOptions): Promise<RawSource> {
+  let currentUrl = options.assertSafeUrl(rawUrl);
 
   for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
     const allowed = await isAllowedByRobots(currentUrl);
@@ -72,8 +72,8 @@ export async function fetchPublicPage(rawUrl: string): Promise<RawSource> {
       }
       const nextUrl = new URL(location, currentUrl);
       assertNotPrivateHost(nextUrl.hostname);
-      if (nextUrl.hostname !== "biddr.com" && !nextUrl.hostname.endsWith(".biddr.com")) {
-        throw new AcquisitionBlockedError("Redirected off biddr.com; refusing to follow.", response.status);
+      if (!options.allowRedirectHost(nextUrl.hostname)) {
+        throw new AcquisitionBlockedError("Redirected off-site; refusing to follow.", response.status);
       }
       currentUrl = nextUrl;
       continue;
@@ -93,7 +93,7 @@ export async function fetchPublicPage(rawUrl: string): Promise<RawSource> {
     const contentType = response.headers.get("content-type");
     const html = await readBodyWithLimit(response, MAX_BODY_BYTES);
 
-    if (BLOCK_SIGNALS.some((pattern) => pattern.test(html.slice(0, 20_000)))) {
+    if (looksBlocked(html)) {
       throw new AcquisitionBlockedError("The page appears to present a CAPTCHA or access restriction.");
     }
 

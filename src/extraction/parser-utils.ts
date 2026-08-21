@@ -33,6 +33,18 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 };
 
 /**
+ * Some sources (numisbids' large-amount display, e.g. "250 000 USD") use a narrow no-break space
+ * (U+202F, which JS's `\s` already matches, same as a plain space or U+00A0) as a thousands
+ * separator rather than "," - confirmed live on a six-figure lot, where the digit-matching regexes
+ * below would otherwise only capture the last group ("000"), silently turning 250000 into 0.
+ * Strips whitespace specifically *between two digits* (never elsewhere, so the required space
+ * before a currency code, or the " - " in a range, is untouched) before any amount regex runs.
+ */
+export function stripDigitGroupingSpaces(text: string): string {
+  return text.replace(/(\d)\s+(?=\d)/g, "$1");
+}
+
+/**
  * Parses a price string as found on Biddr, e.g. "125 EUR", "20 GBP", "€1,250", "50 GBP".
  * Biddr consistently renders amount + ISO currency code, but we tolerate symbols too.
  */
@@ -40,9 +52,10 @@ export function parsePrice(text: string | null | undefined): ParsedPrice | null 
   if (!text) return null;
   const cleaned = cleanText(text);
   if (!cleaned) return null;
+  const normalized = stripDigitGroupingSpaces(cleaned);
 
   // "1,234.56 EUR" / "1234 GBP"
-  const codeMatch = cleaned.match(/([\d.,]+)\s*([A-Z]{3})\b/);
+  const codeMatch = normalized.match(/([\d.,]+)\s*([A-Z]{3})\b/);
   if (codeMatch) {
     const amount = parseAmount(codeMatch[1]!);
     if (amount === null) return null;
@@ -50,7 +63,7 @@ export function parsePrice(text: string | null | undefined): ParsedPrice | null 
   }
 
   // Symbol-prefixed, e.g. "€1,250"
-  const symbolMatch = cleaned.match(/(€|\$|£|¥)\s*([\d.,]+)/);
+  const symbolMatch = normalized.match(/(€|\$|£|¥)\s*([\d.,]+)/);
   if (symbolMatch) {
     const amount = parseAmount(symbolMatch[2]!);
     if (amount === null) return null;
@@ -71,8 +84,9 @@ export function parsePriceRange(text: string | null | undefined): ParsedPriceRan
   if (!text) return null;
   const cleaned = cleanText(text);
   if (!cleaned) return null;
+  const normalized = stripDigitGroupingSpaces(cleaned);
 
-  const rangeMatch = cleaned.match(/([\d.,]+)\s*[-–—]\s*([\d.,]+)\s*([A-Z]{3})?/);
+  const rangeMatch = normalized.match(/([\d.,]+)\s*[-–—]\s*([\d.,]+)\s*([A-Z]{3})?/);
   if (rangeMatch) {
     const low = parseAmount(rangeMatch[1]!);
     const high = parseAmount(rangeMatch[2]!);
@@ -89,6 +103,33 @@ export function parsePriceRange(text: string | null | undefined): ParsedPriceRan
 function parseAmount(raw: string): number | null {
   // Biddr uses "," as a thousands separator and "." as decimal, e.g. "1,234.56".
   const normalized = raw.replace(/,/g, "");
+  const value = Number.parseFloat(normalized);
+  return Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Parses a price in the European convention (e.g. jesusvico.com's "6.000 €", "1.234,56 €") -
+ * "." as thousands separator, "," as decimal, symbol after the amount. Kept separate from
+ * parsePrice (Biddr/sixbid's "1,234.56 EUR" convention) deliberately: a round amount like "6.000"
+ * means 6000 in this convention and 6.0 in the other, so a single merged parser would silently
+ * misparse one source or the other depending on which won a shared regex.
+ */
+export function parseEuropeanPrice(text: string | null | undefined): ParsedPrice | null {
+  if (!text) return null;
+  const cleaned = cleanText(text);
+  if (!cleaned) return null;
+
+  const match = cleaned.match(/([\d.]+(?:,\d+)?)\s*(€|\$|£|¥|CHF)/);
+  if (!match) return null;
+
+  const amount = parseEuropeanAmount(match[1]!);
+  if (amount === null) return null;
+  return { amount, currency: CURRENCY_SYMBOLS[match[2]!] ?? null };
+}
+
+function parseEuropeanAmount(raw: string): number | null {
+  // "6.000" -> 6000, "1.234,56" -> 1234.56
+  const normalized = raw.replace(/\./g, "").replace(",", ".");
   const value = Number.parseFloat(normalized);
   return Number.isFinite(value) ? value : null;
 }
@@ -242,6 +283,30 @@ export function parseBiddrDateText(text: string | null | undefined): string | nu
     }
   }
   return cleaned;
+}
+
+/**
+ * Parses a European-style date/time (e.g. jesusvico.com's "02/07/2026 11:00 CET") - DD/MM/YYYY,
+ * optional HH:MM. Kept separate from parseBiddrDateText (English month names) for the same
+ * ambiguity reason as parseEuropeanPrice above.
+ */
+export function parseEuropeanDateText(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const cleaned = cleanText(text);
+  if (!cleaned) return null;
+
+  const match = cleaned.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (!match) return cleaned;
+
+  const [, day, month, year, hour, minute] = match;
+  const parsed = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    hour ? Number(hour) : 0,
+    minute ? Number(minute) : 0,
+  );
+  return Number.isNaN(parsed.getTime()) ? cleaned : parsed.toISOString();
 }
 
 /** Extracts a query parameter's numeric/string value from a Biddr-style URL. */
